@@ -1,0 +1,73 @@
+name: Auto-Post (Arjun)
+
+on:
+  schedule:
+    # GitHub cron UTC mein hai. IST = UTC + 5:30
+    - cron: "45 2 * * *"    # 08:15 IST — LinkedIn morning posts
+    - cron: "0 13 * * *"    # 18:30 IST — Instagram evening posts
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "DRY RUN (test mode — kuch post nahi hoga)?"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate images (agar missing hain)
+        env:
+          BOSS_HANDLE: ${{ secrets.BOSS_HANDLE }}
+        run: python make_image.py
+
+      - name: Post due content (LinkedIn + Instagram)
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+          GRACE_HOURS: "6"
+          # LinkedIn
+          LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
+          LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
+          LINKEDIN_REFRESH_TOKEN: ${{ secrets.LINKEDIN_REFRESH_TOKEN }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_MEMBER_URN: ${{ secrets.LINKEDIN_MEMBER_URN }}
+          LINKEDIN_TOKEN_EXPIRY: ${{ secrets.LINKEDIN_TOKEN_EXPIRY }}
+          # Meta / Instagram
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_LONG_LIVED_TOKEN: ${{ secrets.META_LONG_LIVED_TOKEN }}
+          META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
+          # Optional
+          IMAGE_BASE_URL: ${{ secrets.IMAGE_BASE_URL }}
+          # Telegram notifications
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python poster.py
+
+      - name: Commit state + images
+        run: |
+          git config user.name "arjun-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Kuch naya commit karne ko nahi hai"
+          else
+            git commit -m "bot: auto-post state update [skip ci]"
+            git push
+          fi

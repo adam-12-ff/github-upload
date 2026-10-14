@@ -1,0 +1,48 @@
+name: Telegram Assistant (Arjun)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # har 5 minute mein Ram ke messages check honge
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telegram-bot
+  cancel-in-progress: false
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Check & reply to Ram's messages
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+          LINKEDIN_TOKEN_EXPIRY: ${{ secrets.LINKEDIN_TOKEN_EXPIRY }}
+          META_LONG_LIVED_TOKEN: ${{ secrets.META_LONG_LIVED_TOKEN }}
+        run: python telegram_bot.py --once
+
+      - name: Commit offset state
+        run: |
+          git config user.name "arjun-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add content/tg_state.json
+          if git diff --cached --quiet; then
+            echo "No new messages"
+          else
+            git commit -m "bot: tg offset [skip ci]"
+            git push
+          fi
