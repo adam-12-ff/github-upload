@@ -1,4 +1,4 @@
-name: Auto-Post (Arjun)
+name: Auto-Post (Sana)
 
 on:
   schedule:
@@ -69,5 +69,6 @@ jobs:
             echo "Kuch naya commit karne ko nahi hai"
           else
             git commit -m "bot: auto-post state update [skip ci]"
-            git push
+            git pull --rebase --autostash || true
+            git push || true
           fi

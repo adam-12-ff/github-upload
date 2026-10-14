@@ -1,20 +1,26 @@
-name: Telegram Assistant (Arjun)
+name: Sana (Master Manager)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # har 5 minute mein Ram ke messages check honge
+    # Har 6 ghante naya live session — beech mein Liva CONTINUOUS chalti hai
+    # (long-polling = replies almost instant). Public repo = unlimited minutes.
+    - cron: "5 0 * * *"
+    - cron: "5 6 * * *"
+    - cron: "5 12 * * *"
+    - cron: "5 18 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: telegram-bot
-  cancel-in-progress: false
+  group: liva-live
+  cancel-in-progress: true
 
 jobs:
-  reply:
+  live:
     runs-on: ubuntu-latest
+    timeout-minutes: 340   # GitHub max 6h — thoda pehle band, agla session le lega
     steps:
       - uses: actions/checkout@v4
 
@@ -25,24 +31,27 @@ jobs:
       - name: Install deps
         run: pip install requests
 
-      - name: Check & reply to Ram's messages
+      - name: Liva LIVE — Ram ke messages sun rahi hai
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
           LINKEDIN_TOKEN_EXPIRY: ${{ secrets.LINKEDIN_TOKEN_EXPIRY }}
           META_LONG_LIVED_TOKEN: ${{ secrets.META_LONG_LIVED_TOKEN }}
-        run: python telegram_bot.py --once
+          PYTHONUNBUFFERED: "1"
+        run: python telegram_bot.py
 
-      - name: Commit offset state
+      - name: Commit memory + offset
         run: |
-          git config user.name "arjun-bot"
+          git config user.name "liva-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add content/tg_state.json
+          git add -A content/
           if git diff --cached --quiet; then
-            echo "No new messages"
+            echo "Kuch naya nahi"
           else
-            git commit -m "bot: tg offset [skip ci]"
-            git push
+            git commit -m "sana: memory sync [skip ci]"
+            git pull --rebase --autostash || true
+            git push || true
           fi

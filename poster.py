@@ -425,7 +425,7 @@ def main() -> int:
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG.info("State saved. Done.")
     if results:
-        tg_notify("🤖 Arjun Auto-Poster — update\n" + "\n".join(results))
+        tg_notify("💼 Sana update\n" + "\n".join(results))
     return 0
 
 

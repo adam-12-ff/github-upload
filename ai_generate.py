@@ -93,11 +93,32 @@ def extract_json_array(text: str):
     return json.loads(text[i:j + 1])
 
 
-def generate_week(monday: date, used_topics: list) -> list:
+def _ai_generate(system: str, user: str) -> str:
+    """Groq -> DeepSeek fallback chain."""
     key = os.getenv("GROQ_API_KEY")
-    if not key:
-        raise RuntimeError("GROQ_API_KEY set nahi hai (.env ya env var mein daalo)")
     model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    payload = {"messages": [{"role": "system", "content": system},
+                            {"role": "user", "content": user}],
+               "temperature": 0.85, "max_tokens": 8000}
+    if key:
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                          headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                          json={**payload, "model": model}, timeout=120)
+        if r.ok:
+            return r.json()["choices"][0]["message"]["content"]
+        print(f"Groq fail ({r.status_code}) — DeepSeek try kar rahe hain...")
+    dsk = os.getenv("DEEPSEEK_API_KEY")
+    if dsk:
+        r = requests.post("https://api.deepseek.com/chat/completions",
+                          headers={"Authorization": f"Bearer {dsk}", "Content-Type": "application/json"},
+                          json={**payload, "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat")}, timeout=180)
+        if r.ok:
+            return r.json()["choices"][0]["message"]["content"]
+        raise RuntimeError(f"DeepSeek bhi fail: {r.status_code} {r.text[:200]}")
+    raise RuntimeError("GROQ_API_KEY / DEEPSEEK_API_KEY dono nahi hai (.env check karo)")
+
+
+def generate_week(monday: date, used_topics: list) -> list:
     days = {p: monday + timedelta(days=o) for p, o in PILLAR_DAY.items()}
     user = f"""Agli week ke 4 posts likho (Monday {days[1]}, Wednesday {days[2]}, \
 Friday {days[3]}, Sunday {days[4]} — pillar 1,2,3,4 respectively).
@@ -107,21 +128,8 @@ Ye topics PEHLE use ho chuke hain — inhe BILKUL repeat mat karna, naya angle/i
 
 4 posts ka strict JSON array do (sirf JSON, schema system prompt mein hai)."""
 
-    r = requests.post(
-        API_URL,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "messages": [{"role": "system", "content": SYSTEM_PROMPT},
-                         {"role": "user", "content": user}],
-            "temperature": 0.85,
-            "max_tokens": 8000,
-        },
-        timeout=120,
-    )
-    if not r.ok:
-        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:300]}")
-    posts = extract_json_array(r.json()["choices"][0]["message"]["content"])
+    content = _ai_generate(SYSTEM_PROMPT, user)
+    posts = extract_json_array(content)
     if not isinstance(posts, list) or len(posts) != 4:
         raise ValueError("4 posts nahi mile")
     return posts
